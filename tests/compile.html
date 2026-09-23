@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Shader compile check</title>
+<link rel="icon" href="data:,">
+<canvas id="c-air" width="64" height="64"></canvas>
+<canvas id="c-fire" width="64" height="64"></canvas>
+<canvas id="c-water" width="64" height="64"></canvas>
+<pre id="out">pending</pre>
+<script src="../js/physics.js"></script>
+<script src="../js/gl.js"></script>
+<script src="../js/fluid.js"></script>
+<script src="../js/air.js"></script>
+<script src="../js/fire.js"></script>
+<script src="../js/water.js"></script>
+<script>
+// Queue every program of every simulation and time how long the driver takes.
+// Nothing is drawn, so a pathological shader shows up as a number, not a hang.
+(async () => {
+  const res = { renderer: null, sims: {} };
+  for (const [name, Ctor] of [['air', ES.AirSim], ['fire', ES.FireSim], ['water', ES.WaterSim]]) {
+    const t0 = performance.now();
+    let sim;
+    try { sim = new Ctor(document.getElementById(`c-${name}`)); }
+    catch (e) { res.sims[name] = { error: e.message.split('\n')[0] }; continue; }
+    const gl = sim.ctx.gl, dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    res.renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    const queued = performance.now() - t0;
+    while (!sim.ctx.ready() && performance.now() - t0 < 120000) await new Promise(r => setTimeout(r, 25));
+    const compiled = performance.now() - t0;
+    const errors = [];
+    for (const p of sim.ctx.cache.values()) {
+      try { sim.ctx.finish(p); } catch (e) { errors.push(e.message.slice(0, 900)); }
+    }
+    res.sims[name] = { programs: sim.ctx.cache.size, parallel: !!sim.ctx.parallel, queuedMs: Math.round(queued), compiledMs: Math.round(compiled), errors };
+  }
+  document.getElementById('out').textContent = JSON.stringify(res, null, 1);
+  window.RESULT = res;
+})();
+</script>

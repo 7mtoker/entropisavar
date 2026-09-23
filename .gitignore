@@ -1,0 +1,4 @@
+tests/out/
+dist/
+node_modules/
+.claude/

@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entropisavar İklim</title>
+<meta name="description" content="Entropisavar: klima, ısı pompası, kombi ve nem çözümleri. Termodinamiğin ikinci yasasını çiğniyoruz, faturası size.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3a13 13 0 0 0 0 26' fill='none' stroke='%2379d5f2' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M16 29a13 13 0 0 0 0-26' fill='none' stroke='%23ff8500' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M9.5 16h12m-4-4.2 4.2 4.2-4.2 4.2' fill='none' stroke='%23e6ecf2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<a class="skip" href="#icerik">İçeriğe geç</a>
+
+<header class="top">
+  <a class="brand" href="#hava" aria-label="Entropisavar ana sayfa">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3a13 13 0 0 0 0 26" fill="none" stroke="var(--cold)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M16 29a13 13 0 0 0 0-26" fill="none" stroke="var(--hot)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M9.5 16h12m-4-4.2 4.2 4.2-4.2 4.2" fill="none" stroke="var(--text)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="wordmark">ENTROPİSAVAR</span>
+  </a>
+  <nav class="nav" aria-label="Bölümler">
+    <a href="#hava">Hava</a>
+    <a href="#ates">Ateş</a>
+    <a href="#su">Su</a>
+    <a href="#hizmetler">Hizmetler</a>
+    <a href="#hesap">Kaç BTU?</a>
+    <a class="nav-cta" href="#iletisim">Keşif iste</a>
+  </nav>
+</header>
+
+<main id="icerik">
+
+<!-- AIR -------------------------------------------------------------- -->
+<section id="hava" class="hero" aria-labelledby="hava-baslik">
+  <div class="sim-stage hero-stage" data-sim="air">
+    <canvas id="air-canvas" aria-label="Oda kesiti: klimadan çıkan soğuk hava çöküyor, bilgisayarın sıcak havası yükseliyor. İmleçle havayı itebilirsiniz."></canvas>
+    <div class="sim-fallback" hidden>Tarayıcınız WebGL2 desteklemiyor. Fizik yasaları hâlâ geçerli, sadece göremiyorsunuz.</div>
+    <div class="hero-copy">
+      <p class="eyebrow">Klima · Isı pompası · Kombi · Nem</p>
+      <h1 id="hava-baslik">Termodinamiğin ikinci yasasını çiğniyoruz. <span class="hot">Faturası size.</span></h1>
+      <p class="lead">Isı kendiliğinden hep sıcaktan soğuğa akar. Biz onu ters yöne, elektrikle ikna ediyoruz. Arkadaki oda gerçek zamanlı bir akışkan simülasyonu: soğuk hava çöker, sıcak hava yükselir, biz de araya fatura sıkıştırırız.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#iletisim">Keşif randevusu</a>
+        <a class="btn btn-ghost" href="#hesap">Kaç BTU lazım?</a>
+      </div>
+    </div>
+    <div class="stage-tag" aria-hidden="true">KESİT A–A · 2,70 m · <span data-out="air-q">—</span></div>
+    <div class="legend-thermal" data-legend hidden>
+      <span class="bar" aria-hidden="true"></span>
+      <span class="ticks"><span>14</span><span>20</span><span>25</span><span>30</span><span>36 °C</span></span>
+    </div>
+    <div class="probe" data-out="air-probe" aria-live="off" hidden></div>
+  </div>
+
+  <div class="hud" aria-label="Klima kontrolleri">
+    <div class="hud-group">
+      <span class="hud-label" id="air-view-label">Görünüm</span>
+      <div class="seg" role="group" aria-labelledby="air-view-label">
+        <button type="button" data-air-view="visible" aria-pressed="true">Görünür</button>
+        <button type="button" data-air-view="thermal" aria-pressed="false">Termal</button>
+        <button type="button" data-air-view="schlieren" aria-pressed="false">Schlieren</button>
+      </div>
+    </div>
+    <div class="hud-group">
+      <label class="hud-label" for="air-set">Hedef <output data-out="air-set">24 °C</output></label>
+      <input id="air-set" type="range" min="16" max="30" step="1" value="24">
+      <span class="quip" data-out="air-quip"></span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label" id="air-fan-label">Fan</span>
+      <div class="seg" role="radiogroup" aria-labelledby="air-fan-label">
+        <input type="radio" name="air-fan" id="air-fan-quiet" value="quiet"><label for="air-fan-quiet">Sessiz</label>
+        <input type="radio" name="air-fan" id="air-fan-auto" value="auto" checked><label for="air-fan-auto">Otomatik</label>
+        <input type="radio" name="air-fan" id="air-fan-turbo" value="turbo"><label for="air-fan-turbo">Turbo</label>
+      </div>
+    </div>
+    <div class="hud-group toggles">
+      <input type="checkbox" id="air-swing" checked><label class="toggle" for="air-swing">Swing</label>
+      <input type="checkbox" id="air-humid" checked><label class="toggle" for="air-humid">Nemli hava (Antalya, Ağustos)</label>
+      <button type="button" class="pause" data-pause="air" aria-pressed="false">Duraklat</button>
+    </div>
+    <dl class="readouts">
+      <div><dt>Oda ortalaması</dt><dd data-out="air-mean">—</dd></div>
+      <div><dt>Üfleme</dt><dd data-out="air-supply">—</dd></div>
+      <div><dt>Kompresör</dt><dd data-out="air-comp">—</dd></div>
+      <div><dt>Jet Re</dt><dd data-out="air-re">—</dd></div>
+      <div><dt>Negatif kaldırma</dt><dd data-out="air-buoy">—</dd></div>
+    </dl>
+    <p class="fine">İmleçle havayı sürükleyin. Görünür modda ısıl kırılma yaklaşık 50× abartıldı; faturanız abartılmadı. Sis, nemli havada soğuk jetin karışmasıyla oluşan gerçek yoğuşmadır; Ankara'daysanız termal moda geçin.</p>
+  </div>
+</section>
+
+<!-- FIRE ------------------------------------------------------------- -->
+<section id="ates" class="chapter" aria-labelledby="ates-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Yanma · Kombi bakımı</p>
+    <h2 id="ates-baslik">Ateşle oynuyoruz. <span class="hot">Lisanslı olarak.</span></h2>
+    <p>Aşağıdaki brülör, tek adımlı Arrhenius kimyasıyla yanan gerçek zamanlı bir reaktif akış. Hava klapesini açın: yakıt havayla önceden karışır, <strong class="cold">mavi</strong> yanar. Kapatın: yakıt havayı dışarıda arar, arada is oluşur, is 1500 K civarında akkor olur ve alev <strong class="hot">sarıya</strong> döner. Renkler Planck yasası ve CIE 1931 gözlemcisiyle hesaplanıyor, boyanmıyor.</p>
+  </div>
+  <div class="sim-grid">
+    <div class="sim-stage fire-stage" data-sim="fire">
+      <canvas id="fire-canvas" aria-label="Kombi brülörü: yedi delikli çelik brülör çubuğu ve alevler. Sürükleyerek aleve üfleyebilirsiniz."></canvas>
+      <div class="sim-fallback" hidden>WebGL2 yok. Alev yok. Karbonmonoksit de yok, en azından burada.</div>
+      <div class="stage-tag" aria-hidden="true">YANMA ODASI · 42 cm · <span data-out="fire-q">—</span></div>
+    </div>
+    <div class="hud hud-side" aria-label="Brülör kontrolleri">
+      <div class="hud-group">
+        <label class="hud-label" for="fire-phi">Hava klapesi · φ <output data-out="fire-phi">1,60</output></label>
+        <input id="fire-phi" type="range" min="0.8" max="3" step="0.05" value="1.6">
+        <span class="scale"><span>açık · fakir</span><span>kapalı · zengin</span></span>
+      </div>
+      <div class="hud-group">
+        <label class="hud-label" for="fire-flow">Modülasyon <output data-out="fire-flow">%75</output></label>
+        <input id="fire-flow" type="range" min="25" max="100" step="1" value="75">
+      </div>
+      <div class="hud-group row">
+        <button type="button" class="btn btn-primary" id="fire-ignite">Ateşle</button>
+        <button type="button" class="pause" data-pause="fire" aria-pressed="false">Duraklat</button>
+      </div>
+      <dl class="readouts">
+        <div><dt>Alev</dt><dd data-out="fire-state">—</dd></div>
+        <div><dt>İyonizasyon</dt><dd data-out="fire-current">—</dd></div>
+        <div><dt>T<sub>maks</sub></dt><dd data-out="fire-tmax">—</dd></div>
+        <div><dt>λ = 1/φ</dt><dd data-out="fire-lambda">—</dd></div>
+        <div><dt>CO riski</dt><dd><span class="pill" data-out="fire-co">—</span></dd></div>
+      </dl>
+      <p class="fine" data-out="fire-colour">—</p>
+      <p class="fine">Aleve üfleyip söndürmeyi deneyin. Gaz akmaya devam eder; kombi 0,8 s güvenlik süresinden sonra yeniden ateşler, üç denemeden sonra kilitlenir. Gerçek kombiler de böyle yapar. Biz sadece daha çok konuşuruz.</p>
+    </div>
+  </div>
+</section>
+
+<!-- WATER ------------------------------------------------------------ -->
+<section id="su" class="chapter" aria-labelledby="su-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Nem · Yoğuşma · Çiy noktası</p>
+    <h2 id="su-baslik">Camınız ağlıyor. <span class="cold">Sebebi siz değilsiniz, çiy noktası.</span></h2>
+    <p>Cam yüzeyi çiy noktasının altına düştüğünde havadaki su buharı camda yoğuşur. Damlalar büyür, birleşir, yerçekimi yüzey gerilimini yendiğinde (yaklaşık 2,3 mm yarıçapta) kayarak iz bırakır. Hepsi hesap: Magnus denklemi, U-değeri, Furmidge tutunma kuvveti.</p>
+  </div>
+  <div class="sim-grid">
+    <div class="sim-stage water-stage" data-sim="water">
+      <canvas id="water-canvas" aria-label="Kış gecesi buğulu cam: damlalar kayıyor, arkada bulanık şehir ışıkları. Parmağınızla camı silebilirsiniz."></canvas>
+      <div class="sim-fallback" hidden>WebGL2 yok. Camı gerçek hayatta silmeyi deneyin.</div>
+      <div class="stage-tag" aria-hidden="true">CAM İÇ YÜZEYİ · 1:1 · <span data-out="water-q">—</span></div>
+    </div>
+    <div class="hud hud-side" aria-label="Oda ve cam koşulları">
+      <div class="hud-group">
+        <label class="hud-label" for="w-tin">İç sıcaklık <output data-out="w-tin">22 °C</output></label>
+        <input id="w-tin" type="range" min="16" max="28" step="0.5" value="22">
+      </div>
+      <div class="hud-group">
+        <label class="hud-label" for="w-rh">Bağıl nem <output data-out="w-rh">%75</output></label>
+        <input id="w-rh" type="range" min="30" max="95" step="1" value="75">
+      </div>
+      <div class="hud-group">
+        <label class="hud-label" for="w-tout">Dış hava <output data-out="w-tout">−2 °C</output></label>
+        <input id="w-tout" type="range" min="-15" max="20" step="1" value="-2">
+      </div>
+      <div class="hud-group">
+        <span class="hud-label" id="w-glz-label">Cam</span>
+        <div class="seg" role="radiogroup" aria-labelledby="w-glz-label">
+          <input type="radio" name="w-glazing" id="w-glz-single" value="single" checked><label for="w-glz-single">Tek</label>
+          <input type="radio" name="w-glazing" id="w-glz-double" value="double"><label for="w-glz-double">Çift</label>
+          <input type="radio" name="w-glazing" id="w-glz-triple" value="triple"><label for="w-glz-triple">Üçlü</label>
+        </div>
+      </div>
+      <div class="hud-group row">
+        <button type="button" class="btn btn-ghost" id="w-dehum" aria-pressed="false">Nem alma modu</button>
+        <button type="button" class="pause" data-pause="water" aria-pressed="false">Duraklat</button>
+      </div>
+      <dl class="readouts">
+        <div><dt>Çiy noktası</dt><dd data-out="dewpoint">—</dd></div>
+        <div><dt>Cam yüzeyi</dt><dd data-out="surface">—</dd></div>
+        <div><dt>Aşırı doygunluk</dt><dd data-out="super">—</dd></div>
+        <div><dt>Durum</dt><dd><span class="pill" data-out="state">—</span></dd></div>
+        <div><dt>Damla</dt><dd data-out="drops">—</dd></div>
+        <div><dt>Camdaki su</dt><dd data-out="water">—</dd></div>
+      </dl>
+      <p class="fine" data-out="glazing-quip">—</p>
+      <p class="fine">Yoğuşma ve buharlaşma 30× hızlandırıldı; damlaların kayması gerçek zamanlı. Parmağınızla silin.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES --------------------------------------------------------- -->
+<section id="hizmetler" class="chapter" aria-labelledby="hizmet-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Hizmetler</p>
+    <h2 id="hizmet-baslik">Yaptığımız işler, <span class="muted">ve yaparken söylediklerimiz.</span></h2>
+  </div>
+  <ul class="services">
+    <li>
+      <h3>Split klima montajı</h3>
+      <p>Duvarınızı deleriz. Sonra kapatırız. Genellikle.</p>
+      <p class="spec">R32 · azotla basınç testi · 500 mikron vakum</p>
+    </li>
+    <li>
+      <h3>Isı pompası</h3>
+      <p>Dışarısı −7 °C iken havadan ısı çekeriz. Evet, orada ısı var. Buna entalpi denir, sihir değil.</p>
+      <p class="spec">SCOP · A7/W35 · inverter kompresör</p>
+    </li>
+    <li>
+      <h3>Kombi bakımı</h3>
+      <p>Yılda bir gelir, baca gazını ölçeriz. Bir şey bulamazsak hayal kırıklığımızı profesyonelce gizleriz.</p>
+      <p class="spec">CO ppm · O₂ % · iyonizasyon akımı µA</p>
+    </li>
+    <li>
+      <h3>Nem alma ve havalandırma</h3>
+      <p>Kış ortası pencere açma ritüelinize son. Isı geri kazanımlı cihaz dışarıyı içeri alır, ısıyı dışarı vermez.</p>
+      <p class="spec">HRV · çiy noktası kontrolü · sessiz kanal</p>
+    </li>
+    <li>
+      <h3>VRF sistemleri</h3>
+      <p>Kırk iç ünite, bir dış ünite, sıfır iç huzur. Ama verimli.</p>
+      <p class="spec">Çok bölgeli · ısı geri kazanımlı · merkezi kontrol</p>
+    </li>
+    <li>
+      <h3>7/24 acil servis</h3>
+      <p>Gece 3'te arayın. Uykulu teknisyenimiz size ısı transferini anlatarak moral verir.</p>
+      <p class="spec">Kaçak tespiti · gaz şarjı · sabır</p>
+    </li>
+  </ul>
+</section>
+
+<!-- CALCULATOR ------------------------------------------------------- -->
+<section id="hesap" class="chapter" aria-labelledby="hesap-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Soğutma yükü</p>
+    <h2 id="hesap-baslik">Kaç BTU lazım? <span class="muted">"Oda 20 metrekareyse 12 bin atarız" dışında bir cevap.</span></h2>
+  </div>
+  <div class="calc">
+    <form class="calc-form" id="calc-form" aria-label="Oda bilgileri">
+      <div class="field"><label for="c-area">Oda alanı (m²)</label><input id="c-area" type="number" min="5" max="120" step="1" value="20" inputmode="decimal"></div>
+      <div class="field"><label for="c-height">Tavan yüksekliği (m)</label><input id="c-height" type="number" min="2.2" max="5" step="0.1" value="2.7" inputmode="decimal"></div>
+      <div class="field"><label for="c-window">Pencere alanı (m²)</label><input id="c-window" type="number" min="0" max="30" step="0.5" value="3" inputmode="decimal"></div>
+      <div class="field"><label for="c-orient">Pencere yönü</label>
+        <select id="c-orient"><option value="N">Kuzey</option><option value="E">Doğu</option><option value="S">Güney</option><option value="W" selected>Batı</option></select></div>
+      <div class="field"><label for="c-insul">Duvar yalıtımı</label>
+        <select id="c-insul"><option value="none">Yok (1970'ler)</option><option value="medium" selected>Orta</option><option value="good">İyi</option></select></div>
+      <div class="field"><label for="c-glazing">Cam</label>
+        <select id="c-glazing"><option value="single">Tek cam</option><option value="double" selected>Çift cam</option><option value="triple">Üçlü cam</option></select></div>
+      <div class="field"><label for="c-people">Kişi sayısı</label><input id="c-people" type="number" min="0" max="30" step="1" value="2" inputmode="numeric"></div>
+      <div class="field"><label for="c-devices">Cihazlar (W)</label><input id="c-devices" type="number" min="0" max="5000" step="10" value="300" inputmode="numeric"></div>
+      <div class="field"><label for="c-tout">Dış hava (°C)</label><input id="c-tout" type="number" min="20" max="48" step="1" value="35" inputmode="numeric"></div>
+      <div class="field"><label for="c-tin">İstenen iç sıcaklık (°C)</label><input id="c-tin" type="number" min="18" max="28" step="1" value="24" inputmode="numeric"></div>
+    </form>
+    <div class="calc-result" aria-live="polite">
+      <p class="hud-label">Tepe soğutma yükü</p>
+      <p class="big" data-out="btu">—</p>
+      <p class="sub"><span data-out="watts">—</span> · önerilen cihaz <strong data-out="unit">—</strong> <span class="muted">(%10 pay dahil)</span></p>
+      <div class="stack" data-out="stack" role="img" aria-label="Yükün kaynaklara göre dağılımı"></div>
+      <ul class="stack-legend" data-out="legend"></ul>
+      <dl class="readouts cop">
+        <div><dt>Carnot sınırı (COP)</dt><dd data-out="cop-carnot">—</dd></div>
+        <div><dt>Gerçekçi COP</dt><dd data-out="cop-real">—</dd></div>
+        <div><dt>Elektrik çekişi</dt><dd data-out="elec">—</dd></div>
+      </dl>
+      <p class="fine" data-out="cop-quip">—</p>
+      <p class="fine">Model: sabit durumda tepe yükü (iletim, güneş, insan, cihaz, sızıntı). Mühendislik projesi yerine geçmez; ama ezbere atılan BTU'dan iyidir.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS + FAQ ----------------------------------------------- -->
+<section id="yorumlar" class="chapter" aria-labelledby="yorum-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Müşteri yorumları</p>
+    <h2 id="yorum-baslik">Memnun müşteriler. <span class="muted">Kurgusal, ama şikâyetleri gerçek.</span></h2>
+  </div>
+  <div class="quotes">
+    <figure><blockquote>Eskiden yazın buzdolabının önünde yaşıyordum. Artık salonda yaşıyorum. Buzdolabı beni özlüyor.</blockquote><figcaption>Z. — Antalya, 42 °C</figcaption></figure>
+    <figure><blockquote>Teknisyen kombimin alevine bakıp "bu sarı olmamalı" dedi. Haklıydı. Ben de o evde yaşamamalıymışım.</blockquote><figcaption>M. — Ankara, φ ≈ 2</figcaption></figure>
+    <figure><blockquote>Camlarım artık terlemiyor. Ben terliyorum, faturayı görünce.</blockquote><figcaption>S. — İzmir, %80 nem</figcaption></figure>
+  </div>
+</section>
+
+<section id="sss" class="chapter" aria-labelledby="sss-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">Sık sorulanlar</p>
+    <h2 id="sss-baslik">Sorular. <span class="muted">Cevaplar. Hafif küçümseme.</span></h2>
+  </div>
+  <div class="faq">
+    <details>
+      <summary>Klima çarpar mı?</summary>
+      <p>Hayır. 16 °C'ye ayarlayıp 4 m/s ile yüzünüze tutarsanız çarpan siz olursunuz. Hedefi 24–26 °C yapın, kanadı yukarı verin: soğuk hava zaten çöker. Yukarıdaki odada izleyebilirsiniz.</p>
+    </details>
+    <details>
+      <summary>16 °C'ye ayarlarsam oda daha hızlı soğur mu?</summary>
+      <p>Hayır. Kompresör zaten tam güçte çalışıyor; 16 yazmak sadece nerede duracağını değiştirir. Termostat gaz pedalı değil, hedeftir.</p>
+    </details>
+    <details>
+      <summary>Kombi alevi neden mavi olmalı?</summary>
+      <p>Mavi ışık, yanma bölgesindeki CH* ve C₂* moleküllerinden gelir: yakıt tam yanıyor demektir. Sarı-turuncu ışık ise is parçacıklarının akkor ışımasıdır: eksik yanma, karbonmonoksit riski. Bir CO dedektörü alın. Bizden almasanız da olur, bu seferlik.</p>
+    </details>
+    <details>
+      <summary>Camlarım neden buğulanıyor?</summary>
+      <p>Cam yüzeyiniz çiy noktasının altında. Ya nemi düşürün, ya camı ısıtın (çift ya da üçlü cam), ya da her sabah camı silerek kardiyo yapın.</p>
+    </details>
+    <details>
+      <summary>Isı pompası kışın çalışır mı?</summary>
+      <p>−7 °C'de bile havada ısı var; mutlak sıfıra kadar hep var. Verim düşer, ama Carnot'nun izin verdiği kadar. Rakibimiz Carnot'yu tanımıyor.</p>
+    </details>
+  </div>
+</section>
+
+<!-- CONTACT ---------------------------------------------------------- -->
+<section id="iletisim" class="chapter" aria-labelledby="iletisim-baslik">
+  <div class="chapter-head">
+    <p class="eyebrow">İletişim</p>
+    <h2 id="iletisim-baslik">Keşif isteyin. <span class="muted">Gelip ölçeriz, sonra iç çekeriz.</span></h2>
+  </div>
+  <div class="contact">
+    <form id="contact-form" class="contact-form" novalidate>
+      <div class="field"><label for="f-name">Ad soyad</label><input id="f-name" name="name" type="text" autocomplete="name"></div>
+      <div class="field"><label for="f-phone">Telefon</label><input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel"></div>
+      <div class="field"><label for="f-topic">Konu</label>
+        <select id="f-topic" name="topic"><option>Klima montajı</option><option>Isı pompası</option><option>Kombi bakımı</option><option>Nem ve yoğuşma</option><option>Sadece dert yanmak</option></select></div>
+      <div class="field wide"><label for="f-msg">Mesaj</label><textarea id="f-msg" name="msg" rows="4"></textarea></div>
+      <div class="field wide"><button type="submit" class="btn btn-primary">Keşif iste</button></div>
+      <p class="form-reply" data-out="form-reply" data-state="idle" role="status"></p>
+    </form>
+    <aside class="address">
+      <p class="hud-label">Merkez</p>
+      <p>Kelvin Sokak No: 273<br>Mutlak Sıfır Mahallesi</p>
+      <p class="fine">Adres de firma da kurgusal: bu bir tanıtım sitesi, form hiçbir yere gönderilmez.</p>
+    </aside>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <p>© 2026 Entropisavar İklim Teknolojileri <span class="muted">(kurgusal)</span>. Bu sitede çerez yok, sadece sıcak hava.</p>
+  <p class="fine">Hiçbir hazır görsel, font ya da kütüphane kullanılmadı: her piksel Navier–Stokes, Arrhenius, Planck ve Magnus denklemlerinden hesaplanıyor. Sürüm <span data-out="build">—</span>.</p>
+</footer>
+
+<script src="js/physics.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/fluid.js"></script>
+<script src="js/air.js"></script>
+<script src="js/fire.js"></script>
+<script src="js/water.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
