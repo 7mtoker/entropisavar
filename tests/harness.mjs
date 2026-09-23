@@ -159,11 +159,15 @@ export class Page {
     throw new Error(`timeout waiting for ${what}`);
   }
   async goto(url) {
+    let off;
     const loaded = new Promise((res) => {
-      const off = this.cdp.on((m) => { if (m.sessionId === this.sid && m.method === 'Page.loadEventFired') { off(); res(); } });
+      off = this.cdp.on((m) => { if (m.sessionId === this.sid && m.method === 'Page.loadEventFired') { off(); res(); } });
     });
     await this.send('Page.navigate', { url });
-    await loaded;
+    // a busy GPU can delay the load event; fall back to polling readyState
+    await Promise.race([loaded, sleep(25000)]);
+    off();
+    await this.waitFor('document.readyState === "complete"', 20000, 'document complete');
   }
   async viewport(width, height, mobile = false) {
     await this.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: mobile ? 2 : 1, mobile });

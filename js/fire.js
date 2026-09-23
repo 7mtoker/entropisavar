@@ -21,9 +21,9 @@
   const P = ES.physics;
   const DOMAIN_H = 0.42;           // m
   const BAR_H = 0.028;             // burner bar height, m
-  const PORTS = 9, PITCH = 0.026, PORT_HW = 0.0045;
+  const PORTS = 7, PITCH = 0.036, PORT_HW = 0.006;
   const CROSSFIRE_S = 0.5;          // time for the ignition front to run the bar's crossfire slots
-  const ALPHA0 = 1.7e-4;            // thickened thermal diffusivity at 300 K, m²/s (×~21 at 1800 K)
+  const ALPHA0 = 1.2e-4;            // thickened thermal diffusivity at 300 K, m²/s (×~21 at 1800 K)
   const RX = 16, RY = 8;
   const QUALITY = [
     { ny: 100, dpr: 1, px: 0.7e6, jacobi: 14, bloom: 4 },
@@ -32,10 +32,23 @@
   ];
 
   const CHEM = `
-const float TA = 12000.0, O_AIR = 1.0, T_AMB = 300.0;
+const float TA = 12000.0, T_AMB = 300.0;
 uniform float uPhi, uA, uQ;
-float oxidiser(vec4 s) { return max(s.w / uPhi + (1.0 - s.w) * O_AIR - max(s.w - s.x, 0.0), 0.0); }
-float burnRate(vec4 s) { return uA * exp(-TA / max(s.y, 250.0)) * max(s.x, 0.0) * oxidiser(s); }
+// Units: 1 = the fuel of a stoichiometric mixture. The burner stream carries
+// φ fuel and 1 oxidiser; it is mostly air, so room air also carries 1.
+// Unburnt fuel at mixture fraction Z is Z·φ; oxidiser left is 1 − consumed.
+float oxidiser(vec4 s) { return max(1.0 - max(s.w * uPhi - s.x, 0.0), 0.0); }
+// Rate = max(Arrhenius kinetics, eddy-dissipation mixing limit). Kinetics decide
+// ignition; above ~1000 K the flame burns as fast as fuel and air are mixed
+// (Magnussen & Hjertager 1977): r = min(F, O)/τ_mix.
+const float INV_TAU_MIX = 600.0;
+float burnRateAt(vec4 s, float T) {
+  float F = max(s.x, 0.0), O = oxidiser(s);
+  float kinetic = uA * exp(-TA / max(T, 250.0)) * F * O;
+  float mixing = INV_TAU_MIX * min(F, O) * smoothstep(800.0, 1100.0, T);
+  return max(kinetic, mixing);
+}
+float burnRate(vec4 s) { return burnRateAt(s, s.y); }
 `;
 
   const DIV_SOURCE = `${CHEM}
@@ -59,9 +72,16 @@ float profile(vec2 x) {
   float d = (x.x - (uBurner.x + i * uBurner.y)) / uBurner.z;
   return max(1.0 - d * d, 0.0);
 }
+// One blade (ramp) per port; secondary air rises through the gaps between blades.
 float inBar(vec2 x) {
-  float x0 = uBurner.x - 0.03, x1 = uBurner.x + (uBurner.w - 1.0) * uBurner.y + 0.03;
-  return step(x0, x.x) * step(x.x, x1) * step(x.y, uBarH);
+  float i = portIndex(x);
+  if (i < 0.0 || i > uBurner.w - 1.0) return 0.0;
+  return step(abs(x.x - (uBurner.x + i * uBurner.y)), uBurner.z + 0.006) * step(x.y, uBarH);
+}
+// Finned-tube heat exchanger across the top; flue gas leaves through the central opening.
+const float HX_Y0 = 0.020, HX_Y1 = 0.042, FLUE_HW = 0.065;
+float inHx(vec2 x) {
+  return step(uDomain.y - HX_Y1, x.y) * step(x.y, uDomain.y - HX_Y0) * step(FLUE_HW, abs(x.x - 0.5 * uDomain.x));
 }
 `;
 
@@ -76,7 +96,7 @@ void main() {
   v.y += uDt * 9.80665 * (1.0 - 300.0 / max(T, 250.0));
   float port = inPort(x), bar = inBar(x);
   v = mix(v, vec2(0.0, uPortV * profile(x)), port);
-  v *= 1.0 - bar * (1.0 - port);
+  v *= 1.0 - max(bar * (1.0 - port), inHx(x));
   o = vec4(v, 0.0, 1.0);
 }`;
 
@@ -86,44 +106,64 @@ void main() {
   // cross-flow at the exit stays below a blow-off speed. Blow on it hard
   // enough and it detaches, exactly as a real one does.
   const ANCHOR = `
-uniform sampler2D uScal, uVel;
+uniform sampler2D uScal, uVel, uPrev;
 uniform vec4 uBurner;
-uniform float uBarH, uH, uBlowOff;
+uniform float uBarH, uH, uBlowOff, uIgn;
+uniform vec2 uIgnPos;
+uniform int uNx, uNy;     // probe box size in cells (uniform bounds: not unrolled)
 out vec4 o;
 void main() {
   float pc = uBurner.x + floor(gl_FragCoord.x) * uBurner.y;
+  // hottest gas in a box around the port exit: the flame sheath sits on the jet's edges
   float t = 0.0;
-  for (int k = 0; k < 3; k++) t = max(t, texelFetch(uScal, ivec2(floor(vec2(pc, uBarH + (2.5 + float(k)) * uH) / uH)), 0).y);
-  float vx = texelFetch(uVel, ivec2(floor(vec2(pc, uBarH + 1.5 * uH) / uH)), 0).x;
-  o = vec4(t > 1100.0 && abs(vx) < uBlowOff ? 1.0 : 0.0, t, vx, 1.0);
+  for (int j = 0; j < uNy; j++) for (int i = 0; i < uNx; i++) {
+    vec2 p = vec2(pc - uBurner.z - 2.0 * uH + float(i) * uH, uBarH + (1.5 + float(j)) * uH);
+    t = max(t, texelFetch(uScal, ivec2(floor(p / uH)), 0).y);
+  }
+  // cross-flow at both rims
+  float vl = texelFetch(uVel, ivec2(floor(vec2(pc - uBurner.z, uBarH + 1.5 * uH) / uH)), 0).x;
+  float vr = texelFetch(uVel, ivec2(floor(vec2(pc + uBurner.z, uBarH + 1.5 * uH) / uH)), 0).x;
+  float vx = max(abs(vl), abs(vr));
+  // latch: an attached base stays attached until blown off or starved of gas
+  float prev = texelFetch(uPrev, ivec2(gl_FragCoord.xy), 0).x;
+  float fuel = texelFetch(uScal, ivec2(floor(vec2(pc, uBarH + 0.5 * uH) / uH)), 0).x;
+  bool crossfire = uIgn > 0.5 && abs(pc - uIgnPos.x) < 0.5 * uBurner.y;   // the running front reaches this port
+  // the igniter's own expansion must not count as a gust: blow-off only detaches an attached base
+  bool lit = fuel > 0.05 && (crossfire || t > 1100.0 || (prev > 0.5 && vx < uBlowOff));
+  o = vec4(lit ? 1.0 : 0.0, t, vx, 1.0);
 }`;
 
   const SOURCES = `${GEOM}${CHEM}
 uniform sampler2D uScal, uAnchor;
-uniform float uDt, uGas, uSpark, uIgn, uSootForm, uSootOx, uH;
+uniform float uDt, uGas, uSpark, uIgn, uSootForm, uSootOx, uH, uCone;
 uniform vec2 uSparkPos, uIgnPos;
 in vec2 vUv; out vec4 o;
 void main() {
   vec2 x = vUv * uDomain;
   vec4 s = texture(uScal, vUv);
   float port = inPort(x), bar = inBar(x);
-  s = mix(s, vec4(uGas, 300.0, 0.0, uGas), port);
+  s = mix(s, vec4(uGas * uPhi, 300.0, 0.0, uGas), port);
   s = mix(s, vec4(0.0, 480.0, 0.0, 0.0), bar * (1.0 - port));   // hot deck metal
   vec2 d = x - uSparkPos;
   s.y = max(s.y, mix(s.y, 2300.0, uSpark * exp(-dot(d, d) / 2.0e-5)));
   // crossfire: the ignition front runs along the bar from port to port
   vec2 g = (x - uIgnPos) / vec2(0.008, 0.005);
   s.y = max(s.y, mix(s.y, 1900.0, uIgn * exp(-dot(g, g))));
-  // anchored flame base just above each port
+  // Sub-grid flame base of an attached port: the premixed Bunsen cone
+  // (height from S_L(φ), physics.coneHeight) plus the rims where the outer
+  // diffusion flame is anchored. It lends the reaction rate the flame-zone
+  // temperature only; enthalpy is untouched, so products leave adiabatic.
   float pi = portIndex(x);
-  if (pi >= 0.0 && pi <= uBurner.w - 1.0 && x.y > uBarH && x.y < uBarH + 2.0 * uH
-      && abs(x.x - (uBurner.x + pi * uBurner.y)) < uBurner.z + uH
-      && texelFetch(uAnchor, ivec2(int(pi), 0), 0).x > 0.5 && s.x > 0.05) {
-    s.y = max(s.y, 1650.0);
+  float tRate = s.y;
+  if (pi >= 0.0 && pi <= uBurner.w - 1.0 && x.y > uBarH && texelFetch(uAnchor, ivec2(int(pi), 0), 0).x > 0.5) {
+    float dx = abs(x.x - (uBurner.x + pi * uBurner.y)), dy = x.y - uBarH;
+    bool rim = abs(dx - uBurner.z) < uH && dy < 2.0 * uH;
+    bool cone = uCone > 0.0 && dx < uBurner.z && dy < uCone * (1.0 - dx / uBurner.z) + 0.5 * uH;
+    if (rim || cone) tRate = max(s.y, 1650.0);
   }
   for (int i = 0; i < 2; i++) {
     float h = 0.5 * uDt;
-    float r = min(burnRate(s) * h, min(max(s.x, 0.0), oxidiser(s)));
+    float r = min(burnRateAt(s, max(s.y, tRate)) * h, min(max(s.x, 0.0), oxidiser(s)));
     s.x -= r;
     s.y += r * uQ;
     float O = oxidiser(s);
@@ -149,13 +189,14 @@ uniform float uR0;
 uniform vec4 uAmbient;
 out vec4 o;
 vec4 at(ivec2 c, ivec2 s) {
-  if (c.x < 0 || c.x >= s.x || c.y >= s.y) return uAmbient;
-  return texelFetch(uX, ivec2(c.x, max(c.y, 0)), 0);
+  if (c.y >= s.y) return uAmbient;                              // flue: room-temperature air above
+  return texelFetch(uX, clamp(c, ivec2(0), s - 1), 0);          // walls and inlet: zero flux
 }
 void main() {
   ivec2 c = ivec2(gl_FragCoord.xy), s = textureSize(uX, 0);
   vec4 b = texelFetch(uB, c, 0);
-  float r = uR0 * pow(clamp(b.y / 300.0, 1.0, 9.0), 1.7);
+  // α ∝ T^1.7, capped at 4× so a one-cell flame sheet is not diffused below ignition
+  float r = uR0 * min(pow(clamp(b.y / 300.0, 1.0, 9.0), 1.7), 4.0);
   vec4 sum = at(c + ivec2(1, 0), s) + at(c - ivec2(1, 0), s) + at(c + ivec2(0, 1), s) + at(c - ivec2(0, 1), s);
   vec4 x = (b + r * sum) / (1.0 + 4.0 * r);
   x.z = b.z;
@@ -183,6 +224,7 @@ void main() {
 uniform sampler2D uScal, uLut, uGlow, uAlbedo;
 uniform vec2 uRes, uSparkPos, uRodBase;
 uniform float uExposure, uChemGain, uHaze, uTime, uSpark;
+uniform float uIrr;   // glow → irradiance, normalised by bloom levels so albedo·uIrr < 1 (no feedback runaway)
 uniform vec3 uChem;
 in vec2 vUv; out vec4 o;
 vec3 blackbody(float T) {
@@ -190,20 +232,20 @@ vec3 blackbody(float T) {
   return l.rgb * exp2(l.a);
 }
 vec3 chamber(vec2 uv) {
-  vec3 irr = texture(uGlow, uv).rgb * 2.4 + vec3(0.004, 0.005, 0.007);
+  vec3 irr = texture(uGlow, uv).rgb * uIrr + vec3(0.004, 0.005, 0.007);
   return texture(uAlbedo, uv).rgb * irr;
 }
 vec3 steel(vec2 x, vec2 uv, float px) {
   float brushed = vnoise(vec2(x.x * 60.0, x.y * 4000.0));   // brushed along the bar: horizontal grain
   vec3 c = vec3(0.42, 0.43, 0.45) * (0.8 + 0.25 * brushed);
-  vec3 irr = texture(uGlow, vec2(uv.x, uv.y + 0.06)).rgb * 3.0 + vec3(0.006);
+  vec3 irr = texture(uGlow, vec2(uv.x, uv.y + 0.06)).rgb * uIrr * 1.25 + vec3(0.006);
   c *= irr;
   // temper colours where the metal ran hottest, next to the ports
   float i = portIndex(x);
   float dp = abs(x.x - (uBurner.x + i * uBurner.y));
   float heat = exp(-dp / 0.012) * smoothstep(uBarH - 0.012, uBarH, x.y);
   c = mix(c, c * vec3(1.25, 0.95, 0.55), heat * 0.6);
-  c += vec3(0.08, 0.06, 0.04) * (1.0 - smoothstep(0.0, 2.0 * px, uBarH - x.y)) * length(texture(uGlow, uv).rgb);
+  c += vec3(0.08, 0.06, 0.04) * (1.0 - smoothstep(0.0, 2.0 * px, uBarH - x.y)) * length(texture(uGlow, uv).rgb) * uIrr;
   return c;
 }
 void main() {
@@ -219,17 +261,32 @@ void main() {
   float tau = max(s.z, 0.0) * 2.6;
   float a = exp(-tau);
   col = col * a + blackbody(s.y) * uExposure * (1.0 - a);
-  col += uChem * burnRate(s) * uChemGain;
+  // the reaction sheet is seen edge-on through the flame's depth: a soft glow, not a hairline
+  float q = 0.4 * burnRate(s) + 0.15 * (burnRate(texture(uScal, vUv + vec2(1.5 * e.x, 0.0))) + burnRate(texture(uScal, vUv - vec2(1.5 * e.x, 0.0)))
+          + burnRate(texture(uScal, vUv + vec2(0.0, 1.5 * e.y))) + burnRate(texture(uScal, vUv - vec2(0.0, 1.5 * e.y))));
+  col += uChem * q * uChemGain;
   float bar = inBar(x) * (1.0 - inPort(x));
   if (bar > 0.0) col = mix(col, steel(x, vUv, px), bar);
+  // heat exchanger: copper tubes in aluminium fins, lit from below by the flame
+  if (x.y > uDomain.y - HX_Y1 - 0.01 && abs(x.x - 0.5 * uDomain.x) > FLUE_HW - 0.01) {
+    vec2 q = vec2(mod(x.x, 0.03) - 0.015, x.y - (uDomain.y - 0.031));
+    float tube = cover(length(q) - 0.0085, px);
+    float fin = cover(abs(mod(x.x, 0.004) - 0.002) - 0.0004, px) * inHx(x);
+    vec3 lit = texture(uGlow, vec2(vUv.x, vUv.y - 0.05)).rgb * uIrr * 1.4 + 0.004;
+    vec3 fins = vec3(0.30, 0.31, 0.33) * lit;
+    vec3 copper = vec3(0.55, 0.27, 0.14) * lit * (0.6 + 0.8 * smoothstep(0.0085, -0.0085, q.y));
+    col = mix(col, vec3(0.02, 0.02, 0.025), inHx(x) * 0.85);
+    col = mix(col, fins, fin);
+    col = mix(col, copper, tube * step(FLUE_HW, abs(x.x - 0.5 * uDomain.x)));
+  }
   col = mix(col, vec3(0.0), inPort(x) * 0.9);
   // ignition electrode: kanthal rod in a ceramic sleeve
   vec2 tip = uSparkPos + vec2(0.0, 0.004);
   float rod = cover(sdSegment(x, uRodBase, tip) - 0.0012, px);
   float sleeve = cover(sdSegment(x, uRodBase, mix(uRodBase, tip, 0.35)) - 0.0028, px);
-  vec3 rodCol = vec3(0.30, 0.29, 0.28) * (texture(uGlow, vUv).rgb * 3.0 + 0.01);
+  vec3 rodCol = vec3(0.30, 0.29, 0.28) * (texture(uGlow, vUv).rgb * uIrr * 1.25 + 0.01);
   col = mix(col, rodCol, rod);
-  col = mix(col, vec3(0.55, 0.53, 0.50) * (texture(uGlow, vUv).rgb * 3.0 + 0.02), sleeve);
+  col = mix(col, vec3(0.55, 0.53, 0.50) * (texture(uGlow, vUv).rgb * uIrr * 1.25 + 0.02), sleeve);
   if (uSpark > 0.0) {
     vec2 a0 = tip, a1 = vec2(uSparkPos.x, uBarH);
     float t = clamp(dot(x - a0, a1 - a0) / dot(a1 - a0, a1 - a0), 0.0, 1.0);
@@ -237,7 +294,7 @@ void main() {
     float dArc = length(x - mix(a0, a1, t) - vec2(jag, 0.0));
     col += vec3(0.55, 0.62, 1.0) * uSpark * (exp(-dArc / 0.0004) * 40.0 + exp(-dArc / 0.004) * 1.5);
   }
-  o = vec4(col, 1.0);
+  o = vec4(clamp(col, 0.0, 6.0e4), 1.0);
 }`;
 
   // Refractory board albedo, drawn once per resize: coarse grain + panel seams.
@@ -260,6 +317,7 @@ uniform float uBloomK;
 in vec2 vUv; out vec4 o;
 void main() {
   vec3 c = texture(uHdr, vUv).rgb + texture(uBloom, vUv).rgb * uBloomK;
+  if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
   o = vec4(dither(toSrgb(aces(c))), 1.0);
 }`;
 
@@ -296,21 +354,26 @@ void main() {
       this.ctx = new ES.gl.Ctx(canvas);
       const ctx = this.ctx;
       this.fluid = new ES.Fluid(ctx, {
-        open: [1, 1, 0, 1], ambient: [0, 300, 0, 0], scalar: 'RGBA', vorticity: 5, jacobi: 20, divSource: DIV_SOURCE,
+        // Atmospheric boiler cell: refractory side walls, secondary air drawn in
+        // from below around the burner, flue open at the top. (Open sides let a
+        // uniform cross-wind drift unchecked — divergence-free, invisible to pressure.)
+        open: [0, 0, 1, 1], ambient: [0, 300, 0, 0], scalar: 'RGBA', vorticity: 7, jacobi: 20, damp: 0.05, divSource: DIV_SOURCE,
       });
       this.prog = {
         forces: ctx.program(FORCES), sources: ctx.program(SOURCES), reduce: ctx.program(REDUCE),
         display: ctx.program(DISPLAY), composite: ctx.program(COMPOSITE), albedo: ctx.program(ALBEDO),
         diffuse: ctx.program(DIFFUSE), anchor: ctx.program(ANCHOR),
       };
-      this.anchor = ctx.target(PORTS, 1, 'RGBA', 'nearest');
+      this.anchor = ctx.double(PORTS, 1, 'RGBA', 'nearest');
       this.lut = makeLut(ctx);
       this.bloom = new ES.gl.Bloom(ctx, 5);
       this.reduced = ctx.target(RX, RY, 'RGBA', 'nearest');
       this.readback = new ES.gl.Readback(ctx, RX, RY);
       this.phi = 1.6;
       this.flow = 0.75;
-      this.chem = { uA: 3.0e5, uQ: 1900 };
+      // Fast-chemistry regime: diffusion flames are mixing-limited (Burke–Schumann);
+      // at 300 K the rate is ~1e-11 /s, so nothing auto-ignites in the room.
+      this.chem = { uA: 3.0e6, uQ: 1900 };
       this.flame = { state: 'igniting', gas: 1, attempts: 0, spark: 0, sparkUntil: 0, lostAt: 0, present: false, maxT: 300, soot: 0 };
       this.stats = { fps: 0, simTime: 0, quality: 1, maxT: 300, state: 'igniting', current: 0 };
       this.qi = -1;
@@ -405,17 +468,20 @@ void main() {
       const f = this.fluid, fl = this.flame;
       fl.spark = this.time < fl.sparkUntil && (this.time * 12) % 1 < 0.55 ? 1 : 0;
       const geom = { uDomain: [this.W, DOMAIN_H], uBurner: this.burner, uBarH: BAR_H };
-      const portV = (0.35 + 1.25 * this.flow) * fl.gas;
+      const portV = (0.3 + 0.9 * this.flow) * fl.gas;
+      this.cone = P.coneHeight(PORT_HW, portV * 2 / 3, this.phi);   // mean of the Poiseuille profile
       const p = this.pointer, ign = this.ignition();
       f.step(dt, {
         sources: () => {
           this.diffuse(dt);
-          this.ctx.draw(this.prog.anchor, this.anchor, {
-            uScal: f.scal.read, uVel: f.vel.read, uBurner: this.burner, uBarH: BAR_H, uH: f.h, uBlowOff: 1.6,
+          this.ctx.draw(this.prog.anchor, this.anchor.write, {
+            uScal: f.scal.read, uVel: f.vel.read, uPrev: this.anchor.read, uBurner: this.burner, uBarH: BAR_H, uH: f.h,
+            uBlowOff: 2.5, uNx: Math.ceil((2 * PORT_HW) / f.h) + 5, uNy: 5, uIgn: ign.on * fl.gas, uIgnPos: ign.pos,
           });
+          this.anchor.swap();
           f.pass(this.prog.sources, f.scal, {
-            ...geom, ...this.chem, uAnchor: this.anchor, uH: f.h, uPhi: this.phi, uDt: dt, uGas: fl.gas, uSpark: fl.spark,
-            uSparkPos: this.sparkPos, uIgn: ign.on * fl.gas, uIgnPos: ign.pos, uSootForm: 7.0, uSootOx: 22.0,
+            ...geom, ...this.chem, uAnchor: this.anchor.read, uH: f.h, uPhi: this.phi, uDt: dt, uGas: fl.gas, uSpark: fl.spark,
+            uSparkPos: this.sparkPos, uIgn: ign.on * fl.gas, uIgnPos: ign.pos, uSootForm: 18.0, uSootOx: 25.0, uCone: this.cone,
           });
           f.pass(this.prog.forces, f.vel, { ...geom, uDt: dt, uPortV: portV });
           if (p.down && p.inside) {
@@ -433,7 +499,7 @@ void main() {
 
     /** Eight Jacobi sweeps, ping-ponging through the advection scratch targets. */
     diffuse(dt) {
-      const f = this.fluid, ctx = this.ctx, N = 8;
+      const f = this.fluid, ctx = this.ctx, N = 5;
       const base = { uB: f.scal.read, uR0: ALPHA0 * dt / (f.h * f.h), uAmbient: [0, 300, 0, 0] };
       let src = f.scal.read;
       for (let i = 0; i < N; i++) {
@@ -447,13 +513,13 @@ void main() {
     render() {
       const c = this.canvas, ctx = this.ctx, fl = this.flame;
       ctx.draw(this.prog.display, this.hdr, {
-        uScal: this.fluid.scal.read, uLut: this.lut, uGlow: this.bloom.wide, uAlbedo: this.albedo,
+        uScal: this.fluid.scal.read, uLut: this.lut, uGlow: this.bloom.wide, uAlbedo: this.albedo, uIrr: 1.6 / this.bloom.mips.length,
         uDomain: [this.W, DOMAIN_H], uRes: [c.width, c.height], uBurner: this.burner, uBarH: BAR_H,
-        uPhi: this.phi, ...this.chem, uExposure: 12.0, uChemGain: 0.012, uHaze: 2.2e-4,
+        uPhi: this.phi, ...this.chem, uExposure: 9.0, uChemGain: 0.0012, uHaze: 2.2e-4,
         uChem: chemColour(this.phi), uTime: this.time, uSpark: fl.spark, uSparkPos: this.sparkPos, uRodBase: this.rodBase,
       });
       const glow = this.bloom.apply(this.hdr, 0.9, 0.6);
-      ctx.draw(this.prog.composite, null, { uHdr: this.hdr, uBloom: glow, uBloomK: 0.55 });
+      ctx.draw(this.prog.composite, null, { uHdr: this.hdr, uBloom: glow, uBloomK: 0.9 / this.bloom.mips.length });
     }
 
     warmup(seconds) {
@@ -469,8 +535,10 @@ void main() {
       this.readStats(now);
       this.render();
       const fl = this.flame;
+      const portV = (0.3 + 0.9 * this.flow) * fl.gas, sl = P.laminarFlameSpeed(this.phi);
       Object.assign(this.stats, {
         maxT: fl.maxT, state: fl.state, soot: fl.soot, attempts: fl.attempts,
+        cone: this.cone, sl, exitU: portV * 2 / 3, flashback: sl > 0 && portV * 2 / 3 <= sl,
         current: fl.present ? (1.5 + 3 * this.flow) * (0.93 + 0.14 * Math.random()) : 0,
       });
     }

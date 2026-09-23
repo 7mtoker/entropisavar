@@ -113,12 +113,13 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
   padding: 9px 12px; border-right: 1px solid var(--line);
 }
 .seg > :last-child { border-right: 0; }
-.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+/* hidden inputs overlap at the group's corner: they must not steal the label's clicks */
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .seg button[aria-pressed="true"], .seg input:checked + label { color: var(--ground); background: var(--cold); }
 .seg input:focus-visible + label { outline: 2px solid var(--cold); outline-offset: -2px; }
 
 .toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.toggles input[type="checkbox"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggles input[type="checkbox"] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .toggle::before {
   content: ""; width: 30px; height: 16px; border-radius: 8px; border: 1px solid var(--line-strong);
@@ -178,6 +179,7 @@ input:focus-visible + .toggle::before { outline: 2px solid var(--cold); outline-
 .hud-group.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .hud-label output { color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .quip { font-size: 12px; color: var(--hot); min-height: 1.2em; }
+.fine.warn { color: var(--warn); }
 .scale { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--faint); }
 .readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 12px 18px; margin: 0; grid-column: 1 / -1; }
 .readouts div { border-top: 1px solid var(--line); padding-top: 8px; min-width: 0; }

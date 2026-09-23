@@ -1,13 +1,14 @@
 # Behaviour contract: Entropisavar site
 
 Target:       `index.html` served over http from this folder, opened in headless
-              Edge/Chrome at 1440x900 and 390x844; also opened from `file://`.
+              Edge/Chrome (real GPU via ANGLE, below-normal priority) at 1280x800 and
+              390x844; also opened from `file://`.
 Build:        the e2e harness prints the SHA-256 of every file it served; the page
               exposes `ES.build`, which must equal the `BUILD` constant in
               `js/app.js` on disk (read back over CDP).
 Fixtures:     control values set through the page's own inputs (sliders, buttons).
-Out of scope: real form delivery (the page is a demo and says so), GPU-specific
-              frame rates (headless uses SwiftShader, so FPS is reported, not gated).
+Out of scope: real form delivery (the page is a demo and says so), frame rates
+              (reported, not gated: headless screenshots stall the compositor).
 
 ## Clauses
 

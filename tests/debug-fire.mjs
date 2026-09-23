@@ -17,7 +17,10 @@ try {
   for (let i = 0; i < 20; i++) {
     const row = await page.eval(`(() => { const f = ES.sims.fire, d = f.readback.data, fl = f.flame;
       let mt = 0, mq = 0, ms = 0; for (let k = 0; k < d.length; k += 4) { mt = Math.max(mt, d[k]); ms = Math.max(ms, d[k+1]); mq = Math.max(mq, d[k+2]); }
-      return [f.time.toFixed(2), fl.state, fl.attempts, Math.round(mt), ms.toFixed(3), mq.toFixed(1), f.ignition().on].join(' '); })()`);
+      const gl = f.ctx.gl, a = new Float32Array(9 * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, f.anchor.read.fbo); gl.readPixels(0, 0, 9, 1, gl.RGBA, gl.FLOAT, a);
+      const anc = [0, 4, 8].map(i => a[i*4] + '/' + Math.round(a[i*4+1]) + '/' + a[i*4+2].toFixed(2)).join(' ');
+      return [f.time.toFixed(2), fl.state, fl.attempts, Math.round(mt), ms.toFixed(3), mq.toFixed(1), f.ignition().on, '|', anc].join(' '); })()`);
     console.log(row);
     await sleep(150);
   }

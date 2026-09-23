@@ -137,10 +137,14 @@ void main() {
   float grain = hash12(floor(gl_FragCoord.xy * 0.75));
   float f = clamp(fog * (0.85 + 0.3 * grain), 0.0, 1.0);
   vec3 sharp = textureLod(uBg, vUv, 0.0).rgb;
-  vec3 blur = textureLod(uBg, vUv, 1.0 + 5.0 * fog).rgb;
+  // four diagonal taps at the chosen mip: a tent filter that hides the coarse mip's blocks
+  float lod = 1.0 + 3.5 * fog;
+  vec2 bo = exp2(lod) * 0.75 / vec2(textureSize(uBg, 0));
+  vec3 blur = 0.25 * (textureLod(uBg, vUv + bo, lod).rgb + textureLod(uBg, vUv - bo, lod).rgb
+                    + textureLod(uBg, vUv + vec2(bo.x, -bo.y), lod).rgb + textureLod(uBg, vUv + vec2(-bo.x, bo.y), lod).rgb);
   vec3 col = mix(sharp, blur, smoothstep(0.0, 0.35, fog));
-  vec3 veil = vec3(0.050, 0.056, 0.066) * uRoom + blur * 0.25;   // room light scattered back by the droplets
-  col = mix(col, veil, f * 0.8);
+  vec3 veil = vec3(0.020, 0.023, 0.028) * uRoom + blur * 0.45;   // room light scattered back by the droplets
+  col = mix(col, veil, f * 0.7);
   vec4 d = texelFetch(uDrops, ivec2(gl_FragCoord.xy), 0);
   if (d.a > 0.002) {
     vec2 p = d.xy / d.a;
@@ -149,11 +153,12 @@ void main() {
     const float SIN_T = 0.6428;                                  // contact angle 40°
     vec3 n = normalize(vec3(p * SIN_T, sqrt(1.0 - l2 * SIN_T * SIN_T)));
     vec2 centre = vUv - p * rpx / uRes;
-    vec2 uvR = centre - p * rpx * 7.0 / uRes;                    // inverted, minified image of the far scene
-    vec3 refr = textureLod(uBg, uvR, 0.6).rgb;
+    vec2 uvR = centre - p * rpx * 3.5 / uRes;                    // inverted, minified image of the far scene
+    vec3 refr = textureLod(uBg, uvR, 0.3).rgb;
     float fres = 0.02 + 0.98 * pow(1.0 - n.z, 5.0);
-    float rim = smoothstep(0.5, 1.0, sqrt(l2));                  // total internal reflection at the edge
-    vec3 dc = refr * (1.0 - 0.9 * rim) * (1.0 - fres);
+    float rim = smoothstep(0.72, 1.0, sqrt(l2));                 // total internal reflection at the edge
+    vec3 dc = refr * (1.0 - 0.75 * rim) * (1.0 - fres);
+    dc += vec3(0.030, 0.033, 0.038) * uRoom * (0.35 + 2.0 * fres);   // the room, faintly mirrored in the cap
     vec3 L = normalize(vec3(-0.45, 0.55, 0.7));
     float spec = pow(max(dot(reflect(vec3(0.0, 0.0, -1.0), n), L), 0.0), 140.0);
     dc += vec3(1.0, 0.9, 0.78) * spec * 3.0 * uRoom + vec3(0.05, 0.055, 0.065) * fres * uRoom;

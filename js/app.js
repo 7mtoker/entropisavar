@@ -170,6 +170,10 @@
     set('fire-state', FLAME_TEXT[s.state] || s.state);
     set('fire-current', `${nf(s.current, 1)} µA`);
     set('fire-tmax', `${Math.round(s.maxT).toLocaleString('tr-TR')} K · ${Math.round(s.maxT - 273.15).toLocaleString('tr-TR')} °C`);
+    set('fire-cone', s.sl > 0 ? `${nf(s.sl, 2)} m/s · ${s.cone > 0 ? `${nf(s.cone * 1000, 0)} mm` : 'yok'}` : 'tutuşma sınırı dışında');
+    const fb = out('fire-flashback');
+    fb.hidden = !s.flashback;
+    if (s.flashback) fb.textContent = `Geri tepme riski: delik çıkış hızı (${nf(s.exitU, 2)} m/s) alev hızının (${nf(s.sl, 2)} m/s) altında. Alev deliğe kaçmak istiyor; gerçek kombiler bu yüzden minimum modülasyonu sınırlar.`;
   }, (sim) => { sim.phi = +$('#fire-phi').value; sim.flow = +$('#fire-flow').value / 100; });
   const phiEl = $('#fire-phi'), flowEl = $('#fire-flow');
   function fireControls() {

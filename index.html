@@ -97,7 +97,7 @@
   <div class="chapter-head">
     <p class="eyebrow">Yanma · Kombi bakımı</p>
     <h2 id="ates-baslik">Ateşle oynuyoruz. <span class="hot">Lisanslı olarak.</span></h2>
-    <p>Aşağıdaki brülör, tek adımlı Arrhenius kimyasıyla yanan gerçek zamanlı bir reaktif akış. Hava klapesini açın: yakıt havayla önceden karışır, <strong class="cold">mavi</strong> yanar. Kapatın: yakıt havayı dışarıda arar, arada is oluşur, is 1500 K civarında akkor olur ve alev <strong class="hot">sarıya</strong> döner. Renkler Planck yasası ve CIE 1931 gözlemcisiyle hesaplanıyor, boyanmıyor.</p>
+    <p>Aşağıdaki atmosferik brülör gerçek zamanlı bir reaktif akış: Arrhenius kinetiği tutuşturur, karışma hızı yakar, ısıl genleşme ve kaldırma kuvveti alevi taşır. Hava klapesini açın: yakıt havayla önceden karışır, delik ağzında <strong class="cold">mavi</strong> bir Bunsen konisi oluşur (yüksekliği ölçülmüş laminer alev hızından hesaplanıyor). Kapatın: yakıt havayı rampaların arasından yükselen ikincil havada arar, arada is oluşur, is akkor olur ve alev <strong class="hot">sarıya</strong> döner. Renkler Planck yasası ve CIE 1931 gözlemcisiyle hesaplanıyor, boyanmıyor.</p>
   </div>
   <div class="sim-grid">
     <div class="sim-stage fire-stage" data-sim="fire">
@@ -124,8 +124,10 @@
         <div><dt>İyonizasyon</dt><dd data-out="fire-current">—</dd></div>
         <div><dt>T<sub>maks</sub></dt><dd data-out="fire-tmax">—</dd></div>
         <div><dt>λ = 1/φ</dt><dd data-out="fire-lambda">—</dd></div>
+        <div><dt>S<sub>L</sub> · koni</dt><dd data-out="fire-cone">—</dd></div>
         <div><dt>CO riski</dt><dd><span class="pill" data-out="fire-co">—</span></dd></div>
       </dl>
+      <p class="fine warn" data-out="fire-flashback" hidden></p>
       <p class="fine" data-out="fire-colour">—</p>
       <p class="fine">Aleve üfleyip söndürmeyi deneyin. Gaz akmaya devam eder; kombi 0,8 s güvenlik süresinden sonra yeniden ateşler, üç denemeden sonra kilitlenir. Gerçek kombiler de böyle yapar. Biz sadece daha çok konuşuruz.</p>
     </div>

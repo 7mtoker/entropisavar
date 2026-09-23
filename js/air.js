@@ -131,7 +131,7 @@ vec3 wall(vec2 x, float px) {
   c += vec3(0.020, 0.024, 0.032) * lamp;
   float minor = max(grid(x.x, 0.1, px), grid(x.y, 0.1, px));
   float major = max(grid(x.x, 0.5, px), grid(x.y, 0.5, px));
-  c += vec3(0.008, 0.014, 0.020) * minor + vec3(0.020, 0.036, 0.052) * major;
+  c += vec3(0.004, 0.007, 0.010) * minor + vec3(0.010, 0.018, 0.026) * major;
   c *= 1.0 - 0.35 * smoothstep(0.35, 0.0, x.y);          // floor shadow
   return c;
 }

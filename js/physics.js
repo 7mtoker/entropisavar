@@ -213,6 +213,30 @@
     return null;
   }
 
+  // ---- premixed flames --------------------------------------------------------
+
+  /**
+   * Laminar burning velocity of methane–air at 1 atm, 298 K (m/s), Gülder (1984):
+   * S_L = W·φ^η·exp(−ξ(φ − 1.075)²), W = 0.422, η = 0.15, ξ = 5.18;
+   * zero outside the flammability limits φ ≈ 0.5 … 1.67.
+   */
+  function laminarFlameSpeed(phi) {
+    if (phi < 0.5 || phi > 1.67) return 0;
+    return 0.422 * phi ** 0.15 * Math.exp(-5.18 * (phi - 1.075) ** 2);
+  }
+
+  /**
+   * Height of a Bunsen cone on a port of half-width r (m) with mean exit
+   * velocity U: the flame front stands where its normal speed matches the
+   * flow, sin α = S_L/U, so H = r·√((U/S_L)² − 1). Zero when the flow is
+   * slower than the flame (it would flash back) or there is no premixed flame.
+   */
+  function coneHeight(r, U, phi) {
+    const s = laminarFlameSpeed(phi);
+    if (s <= 0 || U <= s) return 0;
+    return r * Math.sqrt((U / s) ** 2 - 1);
+  }
+
   // ---- drops on glass -------------------------------------------------------
 
   /** Volume of a spherical cap with contact radius a and contact angle θ (degrees). */
@@ -240,7 +264,7 @@
     planck, cie1931, blackbodyXYZ, xyzToChromaticity, xyzToLinearSRGB, blackbodyColor,
     spectralLineColor, linearToSrgbHex,
     carnotCopCooling, carnotCopHeating, realisticCopCooling, wattsToBtuPerHour,
-    buoyancyAccel, reynolds, coolingLoad, recommendUnit,
+    buoyancyAccel, reynolds, coolingLoad, recommendUnit, laminarFlameSpeed, coneHeight,
     sphericalCapVolume, criticalSlideRadius, mergeRadius,
   };
 });

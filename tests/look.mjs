@@ -18,12 +18,13 @@ try {
   for (const [sim, sel, secs] of [['air', '#hava .sim-stage', 4], ['fire', '#ates .sim-stage', 4], ['water', '#su .sim-stage', 4]]) {
     if (!only.includes(sim)) continue;
     await page.center(sel);
+    if (sim === 'fire' && process.argv[4]) await page.set('#fire-phi', process.argv[4]);
     at(`${sim} scrolled`);
     await page.waitFor(`ES.sims.${sim} && ES.sims.${sim}.stats.simTime > 0`, 30000, `${sim} start`);
     at(`${sim} started`);
     await page.simAdvance(sim, secs, 40000);
     at(`${sim} advanced ${secs}s`);
-    await page.shot(sel, `look-${sim}`);
+    await page.shot(sel, `look-${sim}${sim === 'fire' && process.argv[4] ? '-' + process.argv[4] : ''}`);
     at(`${sim} screenshot`);
     const st = await page.eval(`JSON.stringify(ES.sims.${sim}.stats, (k, v) => typeof v === 'number' ? +v.toFixed(2) : v)`);
     console.log(sim, st);

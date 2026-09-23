@@ -142,6 +142,18 @@ test('standard unit selection', () => {
   assert.equal(P.recommendUnit(30000), null);
 });
 
+test('methane–air laminar flame speed (Gülder 1984) and Bunsen cone height', () => {
+  near(P.laminarFlameSpeed(1.0), 0.41, 0.01, 'S_L at φ = 1');        // measured 0.37–0.41 m/s
+  near(P.laminarFlameSpeed(0.8), 0.276, 0.01, 'S_L at φ = 0.8');     // measured ≈ 0.27 m/s
+  assert.ok(P.laminarFlameSpeed(1.07) > P.laminarFlameSpeed(0.9), 'peak just rich of stoichiometric');
+  assert.equal(P.laminarFlameSpeed(1.8), 0, 'beyond the rich flammability limit');
+  assert.equal(P.laminarFlameSpeed(0.4), 0, 'beyond the lean flammability limit');
+  // H = r·√((U/S_L)² − 1)
+  near(P.coneHeight(0.006, 1.0, 1.0), 0.006 * Math.sqrt((1 / P.laminarFlameSpeed(1)) ** 2 - 1), 1e-12, 'cone height');
+  assert.equal(P.coneHeight(0.006, 0.2, 1.0), 0, 'flashback: flow slower than the flame');
+  assert.equal(P.coneHeight(0.006, 1.0, 2.0), 0, 'no premixed cone past the rich limit');
+});
+
 test('drop mechanics: cap volume, sliding threshold, coalescence', () => {
   near(P.sphericalCapVolume(1, 90), 2 * Math.PI / 3, 1e-12, 'hemisphere');
   const a = P.criticalSlideRadius();
